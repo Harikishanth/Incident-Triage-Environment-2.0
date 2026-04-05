@@ -16,7 +16,9 @@ so they can be imported and tested without triggering the openenv framework.
 """
 
 import random
+import os
 from uuid import uuid4
+from typing import List, Optional
 from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import State
 
@@ -69,20 +71,30 @@ class IncidentTriageEnvironment(Environment):
             "hard": random.choice(HARD_SCENARIOS),
         }
 
-    def reset(self) -> IncidentTriageObservation:
+    def reset(self, task_id: Optional[str] = None) -> IncidentTriageObservation:
         self._state = State(episode_id=str(uuid4()), step_count=0)
-        self._current_task_index = 0
         self._total_reward = 0.0
         self._pick_scenarios()
 
-        task_id = TASK_ORDER[0]
+        # Support TASK_NAME from environment variables or direct param
+        env_task = os.getenv("TASK_NAME")
+        target_task = task_id or env_task
+        
+        if target_task in TASK_ORDER:
+            self._current_task_index = TASK_ORDER.index(target_task)
+            self._is_single_task = True
+        else:
+            self._current_task_index = 0
+            self._is_single_task = False
+
+        task_id = TASK_ORDER[self._current_task_index]
         scenario = self._scenarios[task_id]
 
         return IncidentTriageObservation(
             incident_report=scenario["incident_report"],
             task_id=task_id,
             step_number=0,
-            feedback="Welcome. Analyze the incident report and respond with your findings.",
+            feedback=f"Welcome. Analyze the {task_id} incident and respond with your findings.",
             done=False,
             reward=0.0,
         )
@@ -93,7 +105,7 @@ class IncidentTriageEnvironment(Environment):
         current_task_id = TASK_ORDER[self._current_task_index]
         scenario = self._scenarios[current_task_id]
 
-        # Grade the response
+        # Grade the response (pure-Python logic in graders.py)
         if current_task_id == "easy":
             reward = grade_easy(action.response, scenario)
         elif current_task_id == "medium":
@@ -102,8 +114,13 @@ class IncidentTriageEnvironment(Environment):
             reward = grade_hard(action.response, scenario)
 
         self._total_reward += reward
-        self._current_task_index += 1
-        done = self._current_task_index >= len(TASK_ORDER)
+        
+        # Advance logic
+        if self._is_single_task:
+            done = True
+        else:
+            self._current_task_index += 1
+            done = self._current_task_index >= len(TASK_ORDER)
 
         if not done:
             next_task_id = TASK_ORDER[self._current_task_index]

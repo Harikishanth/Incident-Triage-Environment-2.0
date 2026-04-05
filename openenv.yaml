@@ -12,3 +12,10 @@ tags:
   - sre
   - production
   - real-world
+tasks:
+  - id: easy
+    description: "Single-service failure with clear error logs (keywords)."
+  - id: medium
+    description: "Double-service failure requiring understanding of dependencies."
+  - id: hard
+    description: "Complex cascading failures requiring deep log analysis and root-cause identification."

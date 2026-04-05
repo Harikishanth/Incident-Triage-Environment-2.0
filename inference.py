@@ -28,16 +28,16 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 ENV_URL = os.getenv("ENV_URL", "https://dardrax-incident-triage-env.hf.space")
 
-if not HF_TOKEN:
-    raise ValueError("HF_TOKEN environment variable is required")
+if not API_KEY:
+    raise ValueError("OPENAI_API_KEY or HF_TOKEN environment variable is required")
 
 # ── Constants ────────────────────────────────────────────────────────────────
-TASK_NAME = "incident_triage"
+TASK_NAME_ENV = os.getenv("TASK_NAME")  # e.g., 'easy', 'medium', 'hard'
 BENCHMARK = "incident_triage_env"
 MAX_STEPS = 3           # 3 tasks: easy → medium → hard
 MAX_TOTAL_REWARD = 3.0  # max 1.0 per task
 SUCCESS_SCORE_THRESHOLD = 0.5
-TEMPERATURE = 0.3
+TEMPERATURE = 0.0       # deterministic for evaluation
 MAX_TOKENS = 512
 
 SYSTEM_PROMPT = textwrap.dedent("""
@@ -57,7 +57,9 @@ SYSTEM_PROMPT = textwrap.dedent("""
 
 # ── Logging (strict hackathon format) ────────────────────────────────────────
 def log_start(task: str, env: str, model: str) -> None:
-    print(f"[START] task={task} env={env} model={model}", flush=True)
+    # If TASK_NAME_ENV is set, the overall task reported is the specific level
+    report_task = task if not TASK_NAME_ENV else f"{task}:{TASK_NAME_ENV}"
+    print(f"[START] task={report_task} env={env} model={model}", flush=True)
 
 
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
@@ -78,7 +80,7 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
     )
 
 
-# ── LLM call ─────────────────────────────────────────────────────────────────
+# ── LLM call with Retry Logic ────────────────────────────────────────────────
 def get_model_response(client: OpenAI, incident_report: str, task_id: str, feedback: str) -> str:
     user_prompt = textwrap.dedent(f"""
         Task difficulty: {task_id}
@@ -90,27 +92,38 @@ def get_model_response(client: OpenAI, incident_report: str, task_id: str, feedb
         Analyze this incident report and provide your findings.
     """).strip()
 
-    try:
-        completion = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=TEMPERATURE,
-            max_tokens=MAX_TOKENS,
-            stream=False,
-        )
-        text = (completion.choices[0].message.content or "").strip()
-        return text if text else "Unable to analyze incident."
-    except Exception as exc:
-        print(f"[DEBUG] Model request failed: {exc}", flush=True)
-        return "Unable to analyze incident."
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            completion = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=TEMPERATURE,
+                max_tokens=MAX_TOKENS,
+                stream=False,
+            )
+            text = (completion.choices[0].message.content or "").strip()
+            if text:
+                return text
+        except Exception as exc:
+            if attempt < max_retries - 1:
+                import time
+                wait = (attempt + 1) * 2
+                print(f"[DEBUG] Model request failed (attempt {attempt+1}): {exc}. Retrying in {wait}s...", flush=True)
+                time.sleep(wait)
+            else:
+                print(f"[DEBUG] Model request failed after {max_retries} attempts: {exc}", flush=True)
+
+    return "Unable to analyze incident after retries."
 
 
 # ── Environment HTTP calls ────────────────────────────────────────────────────
 async def env_reset(http: httpx.AsyncClient) -> dict:
-    r = await http.post(f"{ENV_URL}/reset", json={})
+    # Pass TASK_NAME if available to target specific evaluation levels
+    r = await http.post(f"{ENV_URL}/reset", json={"task_id": TASK_NAME_ENV})
     r.raise_for_status()
     return r.json()
 
@@ -130,7 +143,8 @@ async def main() -> None:
     score = 0.0
     success = False
 
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
+    # The benchmark-level task name
+    log_start(task="incident_triage", env=BENCHMARK, model=MODEL_NAME)
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as http:
@@ -139,7 +153,11 @@ async def main() -> None:
             obs = result["observation"]
             done = result.get("done", False)
 
-            for step in range(1, MAX_STEPS + 1):
+            # Define iteration limit based on whether we are in single-task mode
+            loop_limit = 1 if TASK_NAME_ENV else MAX_STEPS
+            total_possible_reward = 1.0 if TASK_NAME_ENV else MAX_TOTAL_REWARD
+
+            for step in range(1, loop_limit + 1):
                 if done:
                     break
 
@@ -165,7 +183,7 @@ async def main() -> None:
                 if done:
                     break
 
-        score = sum(rewards) / MAX_TOTAL_REWARD if MAX_TOTAL_REWARD > 0 else 0.0
+        score = sum(rewards) / total_possible_reward if total_possible_reward > 0 else 0.0
         score = min(max(score, 0.0), 1.0)
         success = score >= SUCCESS_SCORE_THRESHOLD
 
