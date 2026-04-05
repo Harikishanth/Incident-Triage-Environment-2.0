@@ -95,13 +95,16 @@ One episode = exactly 3 steps. Each step is independent (no carry-over state).
 ### `POST /reset`
 Starts a new episode. Returns the first incident report.
 
+**Request Environment Override:**
+The server supports reading `TASK_NAME` (e.g. `easy`, `medium`, `hard`) from environment variables to bypass strict progression and initialize at a specific task level. This allows for rigorous automated evaluation by external judging scripts.
+
 **Response:**
 ```json
 {
   "incident_report": "🚨 INCIDENT REPORT — 02:47 UTC\n...",
   "task_id": "easy",
   "step_number": 0,
-  "feedback": "Welcome. Analyze the incident report and respond with your findings.",
+  "feedback": "Welcome. Analyze the easy incident and respond with your findings.",
   "done": false,
   "reward": 0.0
 }
@@ -139,12 +142,13 @@ Returns Pydantic schemas for `IncidentTriageAction` and `IncidentTriageObservati
 
 ### Easy Grader
 - Checks for **keyword hits** (failing service + root cause terms)
+- Checks for **negation language** (`not <keyword>`, `not a <keyword>`) to prevent keyword stuffing and gaming.
 - ≥2 hits → 0.5–1.0 | 1 hit → 0.3 | 0 hits → 0.0
 - +0.1 bonus for explicit root cause language ("root cause is", "caused by", etc.)
 
 ### Medium Grader
 - **Root cause** (50%): Identify the correct signal source
-- **Red herring** (30%): Correctly dismiss the misleading signal
+- **Red herring OR Action Plan** (30%): Correctly dismiss the misleading signal, or provide a structured action plan that demonstrates you ignored the red herring.
 - **Symptoms** (20%): Identify the downstream symptom
 
 ### Hard Grader
@@ -162,18 +166,18 @@ Running `inference.py` with `Qwen/Qwen2.5-72B-Instruct` against the live Hugging
 | Task | Score |
 |------|-------|
 | Easy | 1.00 |
-| Medium | 0.80 |
-| Hard | 0.40 |
-| **Total (normalized)** | **0.73** |
+| Medium | 0.90 |
+| Hard | 0.10 |
+| **Total (normalized)** | **0.67** |
 
-Scores are reproducible across runs with `TEMPERATURE=0.3`. Minor variance (~±0.1) is expected due to random scenario selection per episode.
+Scores are reproducible across runs with `TEMPERATURE=0.0`. `inference.py` includes a **retry mechanism** to gracefully handle HuggingFace routing timeouts/errors when scoring natively.
 
 ```
 [START] task=incident_triage env=incident_triage_env model=Qwen/Qwen2.5-72B-Instruct
 [STEP] step=1 action=The root cause is... reward=1.00 done=false error=null
-[STEP] step=2 action=Signal C is the root cause... reward=0.80 done=false error=null
-[STEP] step=3 action=First, rollback AuthService... reward=0.40 done=true error=null
-[END] success=true steps=3 score=0.73 rewards=1.00,0.80,0.40
+[STEP] step=2 action=Based on the logs... reward=0.90 done=false error=null
+[STEP] step=3 action=First, rollback AuthService... reward=0.10 done=false error=null
+[END] success=true steps=3 score=0.67 rewards=1.00,0.90,0.10
 ```
 
 ## Running Locally
@@ -201,6 +205,7 @@ python inference.py
 ```
 
 The inference script runs the LLM (via HuggingFace router) through all 3 tasks and prints `[START]`, `[STEP]`, `[END]` logs with scores.
+You can limit evaluation to a single task by exporting `TASK_NAME=hard` before running inference.
 
 ---
 
@@ -218,17 +223,17 @@ openenv push --repo-id DarDrax/incident-triage-env
 
 ```
 incident_triage_env/
-├── inference.py          ← LLM inference script (OpenAI client → HF router)
+├── inference.py          ← LLM inference script (with auto-retry and TASK_NAME support)
 ├── Dockerfile            ← Root-level Docker build
-├── openenv.yaml          ← OpenEnv manifest (name, version, tags)
+├── openenv.yaml          ← OpenEnv manifest (contains tasks metadata definitions)
 ├── README.md             ← This file (also rendered on HF Space)
 ├── models.py             ← IncidentTriageAction, IncidentTriageObservation (Pydantic)
 ├── client.py             ← IncidentTriageEnv client
 ├── pyproject.toml        ← Project metadata and dependencies
 └── server/
-    ├── app.py            ← FastAPI app (HTTP + WebSocket)
-    ├── Dockerfile        ← Server-level Dockerfile
-    └── incident_triage_env_environment.py  ← 3 tasks, graders, Environment class
+    ├── app.py            ← FastAPI app (max_concurrent_envs=25 configured)
+    ├── graders.py        ← Isolated pure-python grading and scenario extraction 
+    └── incident_triage_env_environment.py  ← OS-environment aware OpenEnv class
 ```
 
 ---
