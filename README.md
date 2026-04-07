@@ -104,7 +104,7 @@ The server supports reading `TASK_NAME` (e.g. `easy`, `medium`, `hard`) from env
   "incident_report": "🚨 INCIDENT REPORT — 02:47 UTC\n...",
   "task_id": "easy",
   "step_number": 0,
-  "feedback": "Welcome. Analyze the easy incident and respond with your findings.",
+  "feedback": "Welcome. Analyze the incident report and respond with your findings.",
   "done": false,
   "reward": 0.0
 }
@@ -166,18 +166,18 @@ Running `inference.py` with `Qwen/Qwen2.5-72B-Instruct` against the live Hugging
 | Task | Score |
 |------|-------|
 | Easy | 1.00 |
-| Medium | 0.90 |
-| Hard | 0.10 |
-| **Total (normalized)** | **0.67** |
+| Medium | 0.80 |
+| Hard | 0.55 |
+| **Total (normalized)** | **0.78** |
 
 Scores are reproducible across runs with `TEMPERATURE=0.0`. `inference.py` includes a **retry mechanism** to gracefully handle HuggingFace routing timeouts/errors when scoring natively.
 
 ```
 [START] task=incident_triage env=incident_triage_env model=Qwen/Qwen2.5-72B-Instruct
 [STEP] step=1 action=The root cause is... reward=1.00 done=false error=null
-[STEP] step=2 action=Based on the logs... reward=0.90 done=false error=null
-[STEP] step=3 action=First, rollback AuthService... reward=0.10 done=false error=null
-[END] success=true steps=3 score=0.67 rewards=1.00,0.90,0.10
+[STEP] step=2 action=Based on the logs... reward=0.80 done=false error=null
+[STEP] step=3 action=First, rollback AuthService... reward=0.55 done=true error=null
+[END] success=true steps=3 score=0.78 rewards=1.00,0.80,0.55
 ```
 
 ## Running Locally
