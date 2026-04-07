@@ -34,3 +34,13 @@ Thumbs.db
 # Local logs
 inference*.txt
 uvicorn*.log
+
+# Test artifacts and logs
+*.txt
+*.log
+Webiste screenshots/
+.pytest_cache/
+*.out
+*err.log
+*out.log
+
