@@ -50,6 +50,19 @@ SYSTEM_PROMPT = textwrap.dedent("""
     2. apply_fix (requires target_service) - Use to restart/rollback or fix a target.
     3. declare_resolution (no target_service needed) - Use when fully fixed.
 
+    Acceptable target_service strings (use ONLY these exact items):
+    - PaymentService
+    - OrderService
+    - BillingService
+    - PostgresPrimary
+    - database
+    - web_server
+    - application_server
+    - PostgreSQL_connection_pool
+    - BillingService_TLS_certificate
+    - PostgresPrimary_WAL_volume
+    - PostgresReplica_failover
+
     You must return ONLY a JSON block in this exact format:
     {"tool_name": "...", "target_service": "..."}
 """).strip()
@@ -103,7 +116,7 @@ def get_model_action(client: OpenAI, obs: IncidentTriageObservation) -> Incident
             )
             text = (completion.choices[0].message.content or "").strip()
             # Extract JSON
-            match = re.search(r'\{[^\}]+\}', text, re.DOTALL)
+            match = re.search(r'\{.*\}', text, re.DOTALL)
             if match:
                 data = json.loads(match.group(0))
                 return IncidentTriageAction(
@@ -127,7 +140,7 @@ def run_task(env_client, llm_client, task_id: str):
         
         while not obs.done and steps < 10:
             action = get_model_action(llm_client, obs)
-            action_str = f"{action.tool_name}({action.target_service})"
+            action_str = json.dumps({"tool_name": action.tool_name, "target_service": action.target_service})
             
             result = env_client.step(action)
             obs = result.observation
