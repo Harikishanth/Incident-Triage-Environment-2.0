@@ -14,8 +14,11 @@ tags:
   - real-world
 tasks:
   - id: easy
-    description: "Single-service failure with clear error logs (keywords)."
+    description: "Single-service failure with clear error logs."
+    grader: server.graders.grade_easy
   - id: medium
-    description: "Double-service failure requiring understanding of dependencies."
+    description: "Multi-signal failure requiring red herring identification."
+    grader: server.graders.grade_medium
   - id: hard
-    description: "Complex cascading failures requiring deep log analysis and root-cause identification."
+    description: "Complex cascading P0 outage requiring prioritized action plan."
+    grader: server.graders.grade_hard
