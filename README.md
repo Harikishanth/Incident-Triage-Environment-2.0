@@ -16,14 +16,14 @@ tags:
 short_description: Deterministic evaluation of AI SRE capabilities
 ---
 
-[![CI](https://github.com/Harikishanth/Incident-Triage-Environment/actions/workflows/ci.yml/badge.svg)](https://github.com/Harikishanth/Incident-Triage-Environment/actions/workflows/ci.yml)
-[![Docker](https://github.com/Harikishanth/Incident-Triage-Environment/actions/workflows/docker.yml/badge.svg)](https://github.com/Harikishanth/Incident-Triage-Environment/actions/workflows/docker.yml)
+[![CI](https://github.com/Harikishanth/Incident-Triage-Environment-2.0/actions/workflows/ci.yml/badge.svg)](https://github.com/Harikishanth/Incident-Triage-Environment-2.0/actions/workflows/ci.yml)
+[![Docker](https://github.com/Harikishanth/Incident-Triage-Environment-2.0/actions/workflows/docker.yml/badge.svg)](https://github.com/Harikishanth/Incident-Triage-Environment-2.0/actions/workflows/docker.yml)
 
 > [!NOTE]
 > This is a verified Phase 2 deep-validation submission for the **Meta × HuggingFace × Scaler OpenEnv Hackathon 2026**.
 
 > [!TIP]
-> A live deployed version of this environment is available at: **https://dardrax-incident-triage-env.hf.space**
+> A live deployed version of this environment is available at: **https://dardrax-incident-triage-env-v2.hf.space**
 
 # 🚨 SRE Incident Triage Environment
 
@@ -43,7 +43,7 @@ from models import IncidentTriageAction
 async def main():
     try:
         # Connect to the live HuggingFace Space
-        env = await IncidentTriageEnv(base_url="https://dardrax-incident-triage-env.hf.space")
+        env = await IncidentTriageEnv(base_url="https://dardrax-incident-triage-env-v2.hf.space")
 
         # Reset the environment with a specific scenario tier
         result = await env.reset(task_id="medium")
@@ -85,18 +85,18 @@ The environment exposes standard OpenEnv HTTP endpoints natively deployed on Hug
 
 ```bash
 # Health check
-curl -X GET https://dardrax-incident-triage-env.hf.space/health
+curl -X GET https://dardrax-incident-triage-env-v2.hf.space/health
 
 # Pull dynamic multi-tier tasks
-curl -X GET https://dardrax-incident-triage-env.hf.space/tasks
+curl -X GET https://dardrax-incident-triage-env-v2.hf.space/tasks
 
 # Start a specific evaluation session
-curl -X POST https://dardrax-incident-triage-env.hf.space/reset \
+curl -X POST https://dardrax-incident-triage-env-v2.hf.space/reset \
      -H "Content-Type: application/json" \
      -d '{"task_id": "medium"}'
 
 # Submit an Agent Action
-curl -X POST https://dardrax-incident-triage-env.hf.space/step \
+curl -X POST https://dardrax-incident-triage-env-v2.hf.space/step \
      -H "Content-Type: application/json" \
      -d '{"action": {"response": "Rollback the payment service."}}'
 ```
@@ -207,8 +207,8 @@ TASK_NAME=hard uv run python inference.py
 ### Local Run
 
 ```bash
-git clone https://github.com/Harikishanth/Incident-Triage-Environment.git
-cd Incident-Triage-Environment
+git clone https://github.com/Harikishanth/Incident-Triage-Environment-2.0.git
+cd Incident-Triage-Environment-2.0
 uv sync
 uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -216,14 +216,14 @@ uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
 ### Docker
 
 ```bash
-docker build -t incident_triage_env:latest .
-docker run -p 8000:8000 incident_triage_env:latest
+docker build -t incident_triage_env_v2:latest .
+docker run -p 8000:8000 incident_triage_env_v2:latest
 ```
 
 ### Hugging Face Space (OpenEnv Push)
 
 ```bash
-openenv push --repo-id DarDrax/incident-triage-env
+openenv push --repo-id DarDrax/incident-triage-env-v2
 ```
 The deployed space automatically binds to HuggingFace's exposed infrastructure using port 8000 and natively provisions the OpenEnv Web UI, WebSocket (`/ws`), and automatic `/tasks` endpoints.
 
@@ -236,7 +236,7 @@ The deployed space automatically binds to HuggingFace's exposed infrastructure u
   title   = {Incident Triage Environment: Evaluating Foundation Models on SRE Root Cause Analysis},
   author  = {Tech Tridents (DarDrax)},
   year    = {2026},
-  url     = {https://huggingface.co/spaces/DarDrax/incident-triage-env},
+  url     = {https://huggingface.co/spaces/DarDrax/incident-triage-env-v2},
   note    = {Deterministic text-based RL environment for production incident resolution}
 }
 ```

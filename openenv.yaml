@@ -1,5 +1,5 @@
 spec_version: 1
-name: incident_triage_env
+name: incident_triage_env_v2
 version: 1.0.0
 description: "A production incident triage environment where an AI agent analyzes real-world error logs and identifies root causes, affected services, and prioritized remediation steps. 3 tasks: easy, medium, hard."
 type: space

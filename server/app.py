@@ -43,15 +43,15 @@ try:
     from models import IncidentTriageAction, IncidentTriageObservation
     from server.incident_triage_env_environment import IncidentTriageEnvironment
 except ImportError:
-    from incident_triage_env.models import IncidentTriageAction, IncidentTriageObservation
-    from incident_triage_env.server.incident_triage_env_environment import IncidentTriageEnvironment
+    from incident_triage_env_v2.models import IncidentTriageAction, IncidentTriageObservation
+    from incident_triage_env_v2.server.incident_triage_env_environment import IncidentTriageEnvironment
     
 # Create the app with web interface and README integration
 app = create_app(
     IncidentTriageEnvironment,
     IncidentTriageAction,
     IncidentTriageObservation,
-    env_name="incident_triage_env",
+    env_name="incident_triage_env_v2",
     max_concurrent_envs=25,  # increased to support rigorous multi-agent evaluation scoring
 )
 
@@ -110,7 +110,7 @@ def main(host: str = "0.0.0.0", port: int = 8000):
     This function enables running the server without Docker:
         uv run --project . server
         uv run --project . server --port 8001
-        python -m incident_triage_env.server.app
+        python -m incident_triage_env_v2.server.app
 
     Args:
         host: Host address to bind to (default: "0.0.0.0")
@@ -118,7 +118,7 @@ def main(host: str = "0.0.0.0", port: int = 8000):
 
     For production deployments, consider using uvicorn directly with
     multiple workers:
-        uvicorn incident_triage_env.server.app:app --workers 4
+        uvicorn incident_triage_env_v2.server.app:app --workers 4
     """
     import uvicorn
 

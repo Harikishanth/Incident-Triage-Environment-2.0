@@ -1599,7 +1599,7 @@ core = [
 ]
 
 [[package]]
-name = "openenv-incident-triage-env"
+name = "openenv-incident-triage-env-v2"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

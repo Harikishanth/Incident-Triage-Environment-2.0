@@ -1,5 +1,5 @@
 """
-Incident Triage Environment - Inference Script
+Incident Triage Environment - Inference Script (V2 POMDP)
 
 MANDATORY environment variables:
     HF_TOKEN       Your Hugging Face API key
@@ -15,7 +15,10 @@ STDOUT FORMAT (required by hackathon, strictly):
 
 import asyncio
 import os
+import copy
 import textwrap
+import json
+import re
 from typing import List, Optional
 import httpx
 from openai import OpenAI
@@ -23,34 +26,32 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from client import IncidentTriageEnv
-from models import IncidentTriageAction
+from models import IncidentTriageAction, IncidentTriageObservation
 
 # ── Environment variables ────────────────────────────────────────────────────
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN")
-ENV_URL = os.getenv("ENV_URL", "https://dardrax-incident-triage-env.hf.space")
-
-# Removed strict required check for HF_TOKEN to allow validator initialization checks
+ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
 
 # ── Constants ────────────────────────────────────────────────────────────────
-BENCHMARK = "incident_triage_env"
+BENCHMARK = "incident_triage_env_v2"
 SUCCESS_SCORE_THRESHOLD = 0.5
 TEMPERATURE = 0.0
 MAX_TOKENS = 512
 
 SYSTEM_PROMPT = textwrap.dedent("""
-    You are an expert Site Reliability Engineer (SRE) with 10 years of
-    experience triaging production incidents at large-scale systems.
+    You are an expert Site Reliability Engineer (SRE).
+    You are navigating an interactive incident response environment.
+    You must execute tools sequentially to investigate and resolve the issue.
 
-    You will receive incident reports containing error logs, service signals,
-    and user complaints. Your job is to:
-    1. Identify which service is failing
-    2. Identify the root cause (not just symptoms)
-    3. Recommend prioritized actions to resolve the incident
+    Tools available:
+    1. read_logs (requires target_service) - Use to fetch logs from a service.
+    2. apply_fix (requires target_service) - Use to restart/rollback or fix a target.
+    3. declare_resolution (no target_service needed) - Use when fully fixed.
 
-    Be specific. Reference exact service names and log entries.
-    Keep your response concise and structured.
+    You must return ONLY a JSON block in this exact format:
+    {"tool_name": "...", "target_service": "..."}
 """).strip()
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -72,19 +73,20 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
         flush=True,
     )
 
-def get_model_response(client: OpenAI, incident_report: str, task_id: str, feedback: str) -> str:
+def get_model_action(client: OpenAI, obs: IncidentTriageObservation) -> IncidentTriageAction:
     user_prompt = textwrap.dedent(f"""
-        Task difficulty: {task_id}
-        Previous feedback: {feedback}
+        Task difficulty: {obs.task_id}
+        Step number: {obs.step_number}
+        System Message (Alert/Result): {obs.system_message}
+        Feedback: {obs.feedback}
+        Logs Fetched in current step: {obs.logs}
 
-        INCIDENT REPORT:
-        {incident_report}
-
-        Analyze this incident report and provide your findings.
+        Decide the best tool to use next and output the JSON.
     """).strip()
 
     if not HF_TOKEN:
-        return "Dummy response due to missing HF_TOKEN."
+        # Dummy loop fallback for validation without tokens
+        return IncidentTriageAction(tool_name="declare_resolution", target_service="none")
 
     max_retries = 3
     for attempt in range(max_retries):
@@ -100,48 +102,51 @@ def get_model_response(client: OpenAI, incident_report: str, task_id: str, feedb
                 stream=False,
             )
             text = (completion.choices[0].message.content or "").strip()
-            if text:
-                return text
-        except Exception as exc:
-            if attempt < max_retries - 1:
-                import time
-                wait = (attempt + 1) * 2
-                time.sleep(wait)
-            else:
-                pass
-    return "Unable to analyze incident after retries."
+            # Extract JSON
+            match = re.search(r'\{[^\}]+\}', text, re.DOTALL)
+            if match:
+                data = json.loads(match.group(0))
+                return IncidentTriageAction(
+                    tool_name=data.get("tool_name", "read_logs"),
+                    target_service=data.get("target_service")
+                )
+        except Exception:
+            pass
+    return IncidentTriageAction(tool_name="read_logs", target_service="fallback_error")
 
 def run_task(env_client, llm_client, task_id: str):
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
     rewards = []
     success = False
     score = 0.0
+    steps = 0
     
     try:
-        # Request environment override for this specific task
-        result = env_client.reset(task_id=task_id)
+        result = env_client.reset(options={"task_name": task_id})
         obs = result.observation
         
-        response = get_model_response(
-            llm_client,
-            incident_report=obs.incident_report,
-            task_id=obs.task_id,
-            feedback=obs.feedback,
-        )
-
-        result = env_client.step(IncidentTriageAction(response=response))
-        reward = result.reward
-
-        rewards.append(reward)
-        log_step(step=1, action=response, reward=reward, done=True, error=None)
-
-        score = round(min(max(reward, 0.01), 0.99), 2)
-        success = score >= SUCCESS_SCORE_THRESHOLD
-        
+        while not obs.done and steps < 10:
+            action = get_model_action(llm_client, obs)
+            action_str = f"{action.tool_name}({action.target_service})"
+            
+            result = env_client.step(action)
+            obs = result.observation
+            reward = result.reward
+            
+            rewards.append(reward)
+            steps += 1
+            log_step(step=steps, action=action_str, reward=reward, done=obs.done, error=None)
+            
+            if obs.done:
+                score = round(min(max(reward, 0.01), 0.99), 2)
+                success = score >= SUCCESS_SCORE_THRESHOLD
+                break
+                
     except Exception as e:
         score = 0.0
+        log_step(step=steps+1, action="error", reward=0.0, done=True, error=str(e))
     finally:
-        log_end(success=success, steps=1, score=score, rewards=rewards)
+        log_end(success=success, steps=max(1, steps), score=score, rewards=rewards)
 
 
 def main() -> None:
@@ -149,7 +154,6 @@ def main() -> None:
     target_task = os.getenv("TASK_NAME")
     
     if not target_task:
-        # Default to the first task if the variable isn't injected, but still only run ONE task.
         target_task = "easy"
         print(f"[DEBUG] TASK_NAME not provided, defaulting to {target_task}", flush=True)
     
@@ -157,7 +161,6 @@ def main() -> None:
 
     with IncidentTriageEnv(base_url=ENV_URL).sync() as env:
         run_task(env, llm_client, target_task)
-
 
 if __name__ == "__main__":
     main()

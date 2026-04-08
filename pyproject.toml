@@ -9,7 +9,7 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "openenv-incident_triage_env"
+name = "openenv-incident_triage_env_v2"
 version = "0.1.0"
 description = "Incident Triage Env environment for OpenEnv"
 requires-python = ">=3.10"
@@ -29,10 +29,10 @@ dev = [
 
 [project.scripts]
 # Server entry point - enables running via: uv run --project . server
-# or: python -m incident_triage_env.server.app
-server = "incident_triage_env.server.app:main"
+# or: python -m incident_triage_env_v2.server.app
+server = "incident_triage_env_v2.server.app:main"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["incident_triage_env", "incident_triage_env.server"]
-package-dir = { "incident_triage_env" = ".", "incident_triage_env.server" = "server" }
+packages = ["incident_triage_env_v2", "incident_triage_env_v2.server"]
+package-dir = { "incident_triage_env_v2" = ".", "incident_triage_env_v2.server" = "server" }

@@ -11,7 +11,7 @@ This module has ZERO external dependencies (no openenv, no FastAPI, no httpx).
 This makes it instantly importable for local testing and pytest suites
 without triggering the openenv framework's network bootstrapping.
 
-The IncidentTriageEnvironment in incident_triage_env_environment.py
+The IncidentTriageEnvironment in incident_triage_env_v2_environment.py
 delegates all grading logic to this module.
 """
 
