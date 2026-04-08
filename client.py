@@ -39,20 +39,23 @@ class IncidentTriageEnv(
     def _step_payload(self, action: IncidentTriageAction) -> Dict:
         """Convert action to JSON payload."""
         return {
-            "response": action.response,
+            "tool_name": action.tool_name,
+            "target_service": action.target_service,
+            "parameters": action.parameters,
         }
 
     def _parse_result(self, payload: Dict) -> StepResult[IncidentTriageObservation]:
         """Parse server response into StepResult."""
         obs_data = payload.get("observation", {})
         observation = IncidentTriageObservation(
-            incident_report=obs_data.get("incident_report", ""),
+            system_message=obs_data.get("system_message", ""),
+            logs=obs_data.get("logs", []),
+            metrics=obs_data.get("metrics", {}),
             task_id=obs_data.get("task_id", ""),
             step_number=obs_data.get("step_number", 0),
             feedback=obs_data.get("feedback", ""),
             done=payload.get("done", False),
-            reward=payload.get("reward", 0.0),
-            metadata=obs_data.get("metadata", {}),
+            reward=payload.get("reward", 0.0)
         )
         return StepResult(
             observation=observation,
