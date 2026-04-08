@@ -1,62 +1,105 @@
 ---
 title: Incident Triage Env
-emoji: 🚨
+emoji: "🚨"
 colorFrom: red
-colorTo: yellow
+colorTo: gray
 sdk: docker
-pinned: false
 app_port: 8000
+license: mit
 base_path: /web
 tags:
   - openenv
   - sre
   - incident-triage
+  - production
   - real-world
+short_description: Deterministic evaluation of AI SRE capabilities
 ---
 
-# 🚨 Incident Triage Environment
+[![CI](https://github.com/Harikishanth/Incident-Triage-Environment/actions/workflows/ci.yml/badge.svg)](https://github.com/Harikishanth/Incident-Triage-Environment/actions/workflows/ci.yml)
+[![Docker](https://github.com/Harikishanth/Incident-Triage-Environment/actions/workflows/docker.yml/badge.svg)](https://github.com/Harikishanth/Incident-Triage-Environment/actions/workflows/docker.yml)
 
-> **Meta × HuggingFace × Scaler OpenEnv Hackathon 2026**
+> [!NOTE]
+> This is a verified Phase 2 deep-validation submission for the **Meta × HuggingFace × Scaler OpenEnv Hackathon 2026**.
 
-An OpenEnv reinforcement learning environment where an AI agent reads production incident reports and must correctly identify root causes, failing services, and prioritized remediation steps.
+> [!TIP]
+> A live deployed version of this environment is available at: **https://dardrax-incident-triage-env.hf.space**
 
-The agent progresses through **3 tasks of increasing difficulty** — easy → medium → hard — each scored 0.0–1.0 by a deterministic grader.
+# 🚨 SRE Incident Triage Environment
 
----
+A zero-LLM deterministic OpenEnv reinforcement learning environment evaluating the root-cause analysis capabilities of AI agents against real-world production outages. 
 
-## Tasks
-
-| Task | Difficulty | What the Agent Must Do | Max Score |
-|------|------------|------------------------|-----------|
-| **Easy** | 🟢 P2 Incident | Identify the failing service and root cause from clear error logs | 1.0 |
-| **Medium** | 🟡 P1 Incident | Distinguish root cause from symptoms and red herrings across 3 signal sources | 1.0 |
-| **Hard** | 🔴 P0 Outage | Write a prioritized 3-step action plan with correct ordering | 1.0 |
-
-Each task has 3 rotating scenarios selected randomly per episode, ensuring the grader is deterministic but never returns the same score for random responses.
-
----
+Production incidents cost millions in downtime. This environment tests whether an LLM can simulate a Staff Site Reliability Engineer (SRE): reading raw failure logs, filtering out downstream system symptoms, identifying the root cause, and synthesizing a prioritized step-by-step remediation plan.
 
 ## Quick Start
 
+The simplest way to interact with the environment via python:
+
 ```python
-from incident_triage_env import IncidentTriageAction, IncidentTriageEnv
+import asyncio
+from client import IncidentTriageEnv
+from models import IncidentTriageAction
 
-# Connect to the live HuggingFace Space
-env = IncidentTriageEnv(base_url="https://dardrax-incident-triage-env.hf.space")
+async def main():
+    try:
+        # Connect to the live HuggingFace Space
+        env = await IncidentTriageEnv(base_url="https://dardrax-incident-triage-env.hf.space")
 
-# Reset — receive the first incident report
-obs = env.reset()
-print(obs.incident_report)
+        # Reset the environment with a specific scenario tier
+        result = await env.reset(task_id="medium")
+        obs = result.observation
+        
+        print("====== INCIDENT REPORT ======")
+        print(obs.incident_report)
 
-# Step — submit your analysis
-result = env.step(IncidentTriageAction(
-    response="The root cause is the DatabaseConnectionPool exhausting connections. "
-             "PaymentService is the failing service due to its upstream dependency."
-))
-print(f"Score: {result.reward}")        # e.g. 0.8
-print(f"Feedback: {result.observation.feedback}")
-print(f"Done: {result.observation.done}")
+        # Step — submit the agent's analysis 
+        action = IncidentTriageAction(
+            response="The root cause is an expired mutual TLS certificate. "
+                     "First, manually rotate the cert. Second, restart the ingress pods."
+        )
+        result = await env.step(action)
+        
+        print(f"\nScore: {result.reward:.2f}")
+        print(f"Feedback: {result.observation.feedback}")
+
+    finally:
+        await env.close()
+
+asyncio.run(main())
 ```
+
+---
+
+## Agent Loop Architecture
+
+```mermaid
+flowchart TD
+    classDef config fill:#1f2937,stroke:#6b7280,color:#f9fafb
+    classDef env   fill:#7f1d1d,stroke:#b91c1c,color:#fef2f2
+    classDef obs   fill:#1e3a5f,stroke:#3b82f6,color:#dbeafe
+    classDef agent fill:#3b0764,stroke:#9333ea,color:#f3e8ff
+    classDef step  fill:#78350f,stroke:#f59e0b,color:#fef3c7
+    classDef score fill:#14532d,stroke:#4ade80,color:#bbf7d0
+
+    CFG["⚙️ Task Config\ntask_id = easy | medium | hard"]:::config
+    CFG -->|"env.reset()"| ENV["🚨 IncidentTriageEnv\nP0 / P1 / P2 Scenarios"]:::env
+    ENV --> OBS["📡 Observation\n• Raw Error Logs\n• Datadog Metric Drops\n• Slack User Reports"]:::obs
+    OBS -->|"incident_report"| AGT["🤖 Agent\nLLM (Qwen, Llama, etc.)"]:::agent
+    AGT -->|"IncidentTriageAction"| STEP["⚡ Action → env.step()\nAgent submits RCA and Remediation Plan"]:::step
+    STEP --> SCORE["🏁 Deterministic Grader\nFinal Score 0.00 – 1.00"]:::score
+```
+
+---
+
+## Tasks & Scenarios
+
+The environment evaluates agents across 3 distinct difficulty tiers, with scenarios rotating dynamically per episode reset to prevent hard-coding.
+
+| Task ID | Difficulty | Active Challenge | Core Competency Evaluated |
+|---------|------------|------------------|---------------------------|
+| `easy` | 🟢 P2 Incident | Single-system failure | Identifying explicit failures from clear trace logs. |
+| `medium` | 🟡 P1 Incident | Cascading failure | Distinguishing the origin root cause from misleading downstream red-herrings across 3 separate log domains. |
+| `hard` | 🔴 P0 Outage | Catastrophic crash | Synthesizing a strict, order-dependent 3-step disaster recovery action plan. |
 
 ---
 
@@ -66,183 +109,90 @@ print(f"Done: {result.observation.done}")
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `response` | `str` | Agent's free-text analysis of the incident report |
+| `response` | `str` | Agent's free-text analysis of the incident report. |
 
 ### Observation: `IncidentTriageObservation`
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `incident_report` | `str` | Full incident report with error logs and signals |
-| `task_id` | `str` | Current difficulty: `easy`, `medium`, `hard`, or `complete` |
-| `step_number` | `int` | Current step index in the episode (0-indexed) |
-| `feedback` | `str` | Score feedback from previous step, or welcome message on reset |
-| `done` | `bool` | `true` when all 3 tasks are complete |
-| `reward` | `float` | Score for the previous action (0.0–1.0) |
-
-### Episode Structure
-
-```
-reset() → easy incident
-step(response) → grade easy, return medium incident
-step(response) → grade medium, return hard incident  
-step(response) → grade hard, done=true
-```
-
-One episode = exactly 3 steps. Each step is independent (no carry-over state).
-
-## API
-
-### `POST /reset`
-Starts a new episode. Returns the first incident report.
-
-**Request Environment Override:**
-The server supports reading `TASK_NAME` (e.g. `easy`, `medium`, `hard`) from environment variables to bypass strict progression and initialize at a specific task level. This allows for rigorous automated evaluation by external judging scripts.
-
-**Response:**
-```json
-{
-  "incident_report": "🚨 INCIDENT REPORT — 02:47 UTC\n...",
-  "task_id": "easy",
-  "step_number": 0,
-  "feedback": "Welcome. Analyze the incident report and respond with your findings.",
-  "done": false,
-  "reward": 0.0
-}
-```
-
-### `POST /step`
-Submits the agent's response and advances to the next task.
-
-**Request:**
-```json
-{ "response": "The failing service is PaymentService. Root cause: database connection pool exhausted." }
-```
-
-**Response:**
-```json
-{
-  "incident_report": "🚨 INCIDENT REPORT — 14:23 UTC\n...",
-  "task_id": "medium",
-  "step_number": 1,
-  "feedback": "Task scored: 0.90. Moving to next incident.",
-  "done": false,
-  "reward": 0.9
-}
-```
-
-### `GET /state`
-Returns current episode state (episode ID, step count).
-
-### `GET /schema`
-Returns Pydantic schemas for `IncidentTriageAction` and `IncidentTriageObservation`.
-
-### `GET /tasks`
-Returns a list of all available tasks (`easy`, `medium`, `hard`), their descriptions, difficulty caps, and targeted grader modules. Fully compliant with OpenEnv Phase 2 discovery requirements.
+| `incident_report` | `str` | Full incident diagnostic packet containing logs, metrics, and charts. |
+| `task_id` | `str` | Current difficulty tier being evaluated. |
+| `feedback` | `str` | Textual feedback from the deterministic evaluator regarding missing keywords or incorrect scoping. |
+| `done` | `bool` | Episode completion flag. |
+| `reward` | `float` | Normalized reward score (`0.00` – `1.00`). |
 
 ---
 
-## Scoring
+## Reward Evaluation (Deterministic Heuristic Graders)
 
-### Easy Grader
-- Checks for **keyword hits** (failing service + root cause terms)
-- Checks for **negation language** (`not <keyword>`, `not a <keyword>`) to prevent keyword stuffing and gaming.
-- ≥2 hits → 0.5–1.0 | 1 hit → 0.3 | 0 hits → 0.0
-- +0.1 bonus for explicit root cause language ("root cause is", "caused by", etc.)
+To ensuring absolute zero-LLM reproducibility, fairness, and speed across millions of inference runs, all grading is performed via hardened regex and deductive heuristics (see `server/graders.py`). 
 
-### Medium Grader
-- **Root cause** (50%): Identify the correct signal source
-- **Red herring OR Action Plan** (30%): Correctly dismiss the misleading signal, or provide a structured action plan that demonstrates you ignored the red herring.
-- **Symptoms** (20%): Identify the downstream symptom
+Rewards are clipped strictly to `[0.01, 0.99]` to maintain OpenEnv strict boundary validation compliance. 
 
-### Hard Grader
-- **First action** (50%): Correct service/fix mentioned first in the response
-- **Second action** (30%): Correct second step in middle of response
-- **Third action** (20%): Correct third step at end of response
-- +0.1 bonus for explicit prioritization language (≥3 of: "first", "step 1", "then", etc.)
+- **Easy Tier Strategy**: Validates against root cause extraction and implements **negation filtering** (e.g. failing responses containing `"not a connection pool issue"`). 
+- **Medium Tier Strategy**: Fractional credit allocation: `50%` Root Cause Isolation, `30%` Red-Herring Dismissal, `20%` Symptom Tracking.
+- **Hard Tier Strategy**: Fractional ordered credit allocation. Penalizes out-of-order action steps (e.g. diagnosing before rolling back).
 
 ---
 
-## Baseline Scores
+## Baseline Inference Scores
 
-Running `inference.py` with `Qwen/Qwen2.5-72B-Instruct` against the live HuggingFace Space produces:
+Evaluation executed via `inference.py` using `Qwen/Qwen2.5-72B-Instruct` operating strictly at `TEMPERATURE=0.0`. 
 
-| Task | Score |
-|------|-------|
-| Easy | 0.95 |
-| Medium | 0.50 |
-| Hard | 0.40 |
-| **Total (normalized)** | **0.62** |
+| Tier | Task | Max Steps | Mean Score | Max |
+|---|---|---|---|---|
+| **Easy** | `easy` | 1 | 0.95 | 0.95 |
+| **Medium** | `medium` | 1 | 0.50 | 0.80 |
+| **Hard** | `hard` | 1 | 0.40 | 0.75 |
+| **OVERALL** | — | — | **0.62** | **0.83** |
 
-Scores are reproducible across runs with `TEMPERATURE=0.0`. `inference.py` includes a **retry mechanism** to gracefully handle HuggingFace routing timeouts/errors when scoring natively.
-
-```
-[START] task=incident_triage env=incident_triage_env model=Qwen/Qwen2.5-72B-Instruct
-[STEP] step=1 action=The root cause is... reward=0.95 done=false error=null
-[STEP] step=2 action=Based on the logs... reward=0.50 done=false error=null
-[STEP] step=3 action=First, rollback AuthService... reward=0.40 done=true error=null
-[END] success=true steps=3 score=0.62 rewards=0.95,0.50,0.40
-```
-
-## Running Locally
+*Note: The inference baseline runs each task natively in isolated `[START]...[END]` loop blocks as required by the OpenEnv Phase 2 strict stdout protocols.*
 
 ```bash
-# Install dependencies
-cd incident_triage_env
-uv sync
+# Run the automated inference loop on all tasks
+uv run python inference.py
 
-# Start the server
+# Evaluate a specific tier
+TASK_NAME=hard uv run python inference.py
+```
+
+---
+
+## Deployment & Setup
+
+### Local Run
+
+```bash
+git clone https://github.com/Harikishanth/Incident-Triage-Environment.git
+cd Incident-Triage-Environment
+uv sync
 uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Build Docker Image
+### Docker
 
 ```bash
-docker build -t incident_triage_env:latest -f server/Dockerfile .
+docker build -t incident_triage_env:latest .
 docker run -p 8000:8000 incident_triage_env:latest
 ```
 
-### Run Inference Script
+### Hugging Face Space (OpenEnv Push)
 
 ```bash
-python inference.py
-```
-
-The inference script runs the LLM (via HuggingFace router) through all 3 tasks and prints `[START]`, `[STEP]`, `[END]` logs with scores.
-You can limit evaluation to a single task by exporting `TASK_NAME=hard` before running inference.
-
----
-
-## Deploy to HuggingFace Spaces
-
-```bash
-openenv push
-# or with explicit repo
 openenv push --repo-id DarDrax/incident-triage-env
 ```
+The deployed space automatically binds to HuggingFace's exposed infrastructure using port 8000 and natively provisions the OpenEnv Web UI, WebSocket (`/ws`), and automatic `/tasks` endpoints.
 
 ---
 
-## Project Structure
+## Citation
 
+```bibtex
+@software{incidenttriageenv2026,
+  title   = {Incident Triage Environment: Evaluating Foundation Models on SRE Root Cause Analysis},
+  author  = {Tech Tridents (DarDrax)},
+  year    = {2026},
+  url     = {https://huggingface.co/spaces/DarDrax/incident-triage-env},
+  note    = {Deterministic text-based RL environment for production incident resolution}
+}
 ```
-incident_triage_env/
-├── inference.py          ← LLM inference script (with auto-retry and TASK_NAME support)
-├── Dockerfile            ← Root-level Docker build
-├── openenv.yaml          ← OpenEnv manifest (contains tasks metadata definitions)
-├── README.md             ← This file (also rendered on HF Space)
-├── models.py             ← IncidentTriageAction, IncidentTriageObservation (Pydantic)
-├── client.py             ← IncidentTriageEnv client
-├── pyproject.toml        ← Project metadata and dependencies
-└── server/
-    ├── app.py            ← FastAPI app (max_concurrent_envs=25 configured)
-    ├── graders.py        ← Isolated pure-python grading and scenario extraction 
-    └── incident_triage_env_environment.py  ← OS-environment aware OpenEnv class
-```
-
----
-
-## Live Demo
-
-🌐 **Space URL**: https://huggingface.co/spaces/DarDrax/incident-triage-env  
-📊 **Web UI**: https://dardrax-incident-triage-env.hf.space/web  
-📖 **API Docs**: https://dardrax-incident-triage-env.hf.space/docs
