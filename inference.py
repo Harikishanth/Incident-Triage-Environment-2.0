@@ -32,7 +32,7 @@ from models import IncidentTriageAction, IncidentTriageObservation
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN")
-ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
+ENV_URL = os.getenv("ENV_URL", "https://dardrax-incident-triage-env-v2.hf.space")
 
 # ── Constants ────────────────────────────────────────────────────────────────
 BENCHMARK = "incident_triage_env_v2"
@@ -150,17 +150,15 @@ def run_task(env_client, llm_client, task_id: str):
 
 
 def main() -> None:
-    # STRICT ADMIN RULE: Run ONE task at a time based on TASK_NAME. Do NOT loop.
+    # Loop all 3 tasks by default. TASK_NAME overrides for single-task testing.
     target_task = os.getenv("TASK_NAME")
-    
-    if not target_task:
-        target_task = "easy"
-        print(f"[DEBUG] TASK_NAME not provided, defaulting to {target_task}", flush=True)
-    
+    tasks_to_run = [target_task] if target_task else ["easy", "medium", "hard"]
+
     llm_client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN or "dummy")
 
     with IncidentTriageEnv(base_url=ENV_URL).sync() as env:
-        run_task(env, llm_client, target_task)
+        for t in tasks_to_run:
+            run_task(env, llm_client, t)
 
 if __name__ == "__main__":
-    main()
+    main()
