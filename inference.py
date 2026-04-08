@@ -145,15 +145,18 @@ def run_task(env_client, llm_client, task_id: str):
 
 
 def main() -> None:
-    # Optional task selection from environment
+    # STRICT ADMIN RULE: Run ONE task at a time based on TASK_NAME. Do NOT loop.
     target_task = os.getenv("TASK_NAME")
-    tasks_to_run = [target_task] if target_task else ["easy", "medium", "hard"]
+    
+    if not target_task:
+        # Default to the first task if the variable isn't injected, but still only run ONE task.
+        target_task = "easy"
+        print(f"[DEBUG] TASK_NAME not provided, defaulting to {target_task}", flush=True)
     
     llm_client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN or "dummy")
 
     with IncidentTriageEnv(base_url=ENV_URL).sync() as env:
-        for t in tasks_to_run:
-            run_task(env, llm_client, t)
+        run_task(env, llm_client, target_task)
 
 
 if __name__ == "__main__":
