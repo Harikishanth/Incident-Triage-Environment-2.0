@@ -136,6 +136,9 @@ Returns current episode state (episode ID, step count).
 ### `GET /schema`
 Returns Pydantic schemas for `IncidentTriageAction` and `IncidentTriageObservation`.
 
+### `GET /tasks`
+Returns a list of all available tasks (`easy`, `medium`, `hard`), their descriptions, difficulty caps, and targeted grader modules. Fully compliant with OpenEnv Phase 2 discovery requirements.
+
 ---
 
 ## Scoring
@@ -167,8 +170,8 @@ Running `inference.py` with `Qwen/Qwen2.5-72B-Instruct` against the live Hugging
 |------|-------|
 | Easy | 0.95 |
 | Medium | 0.50 |
-| Hard | 0.50 |
-| **Total (normalized)** | **0.65** |
+| Hard | 0.40 |
+| **Total (normalized)** | **0.62** |
 
 Scores are reproducible across runs with `TEMPERATURE=0.0`. `inference.py` includes a **retry mechanism** to gracefully handle HuggingFace routing timeouts/errors when scoring natively.
 
@@ -176,8 +179,8 @@ Scores are reproducible across runs with `TEMPERATURE=0.0`. `inference.py` inclu
 [START] task=incident_triage env=incident_triage_env model=Qwen/Qwen2.5-72B-Instruct
 [STEP] step=1 action=The root cause is... reward=0.95 done=false error=null
 [STEP] step=2 action=Based on the logs... reward=0.50 done=false error=null
-[STEP] step=3 action=First, rollback AuthService... reward=0.50 done=true error=null
-[END] success=true steps=3 score=0.65 rewards=0.95,0.50,0.50
+[STEP] step=3 action=First, rollback AuthService... reward=0.40 done=true error=null
+[END] success=true steps=3 score=0.62 rewards=0.95,0.50,0.40
 ```
 
 ## Running Locally
