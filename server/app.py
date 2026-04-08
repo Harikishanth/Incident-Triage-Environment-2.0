@@ -56,6 +56,53 @@ app = create_app(
 )
 
 
+# ── /tasks endpoint — required by Phase 2 deep validator ─────────────────────
+# The hackathon validator calls GET /tasks to discover available tasks and
+# confirm each has a grader. Without this, it reports "Not enough tasks with graders."
+
+@app.get("/tasks", tags=["Environment Info"], summary="List all tasks with graders")
+async def list_tasks():
+    """Return the list of available tasks, their difficulties, and grader info."""
+    return [
+        {
+            "id": "easy",
+            "name": "Single-Service Failure",
+            "description": "Identify a single failing service from clear error logs and recommend a fix.",
+            "difficulty": "easy",
+            "time_limit_seconds": 300,
+            "max_steps": 3,
+            "grader": "server.graders.grade_easy",
+            "action_schema": {
+                "response": "Free-text incident analysis identifying the failing service, root cause, and recommended actions."
+            },
+        },
+        {
+            "id": "medium",
+            "name": "Multi-Service Failure with Red Herrings",
+            "description": "Identify the true root cause among misleading symptoms and red-herring services.",
+            "difficulty": "medium",
+            "time_limit_seconds": 600,
+            "max_steps": 3,
+            "grader": "server.graders.grade_medium",
+            "action_schema": {
+                "response": "Free-text incident analysis that correctly identifies the root cause while calling out red herrings."
+            },
+        },
+        {
+            "id": "hard",
+            "name": "Cascading Infrastructure Failure",
+            "description": "Diagnose a cascading multi-service outage, identify all affected services, and provide prioritized remediation steps.",
+            "difficulty": "hard",
+            "time_limit_seconds": 900,
+            "max_steps": 3,
+            "grader": "server.graders.grade_hard",
+            "action_schema": {
+                "response": "Free-text incident analysis with FIRST/SECOND/THIRD prioritized remediation plan explaining causal ordering."
+            },
+        },
+    ]
+
+
 def main(host: str = "0.0.0.0", port: int = 8000):
     """
     Entry point for direct execution via uv run or python -m.
@@ -80,3 +127,4 @@ def main(host: str = "0.0.0.0", port: int = 8000):
 
 if __name__ == "__main__":
     main()
+
